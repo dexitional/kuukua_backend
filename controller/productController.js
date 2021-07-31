@@ -42,12 +42,12 @@ module.exports = {
         try{
            var ins = await Product.create(req.body);
            if(ins){
-             res.status(200).json({success:true, data: ins});
+             res.json({success:true, data: ins});
            }else{
-             res.status(403).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.json({success:false, data: null, msg:"Something wrong happend!"});
            }
         }catch(e){
-            res.status(403).json({success:false, data: null, msg: e});
+            res.json({success:false, data: null, msg: e});
         }
     },
 
@@ -57,12 +57,12 @@ module.exports = {
         try{
             var ins = await Product.findByIdAndUpdate({_id: id},req.body);
             if(ins){
-              res.status(200).json({success:true, data: ins});
+              res.json({success:true, data: ins});
             }else{
-              res.status(403).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.json({success:false, data: null, msg:"Something wrong happend!"});
             }
          }catch(e){
-             res.status(403).json({success:false, data: null, msg: e});
+             res.json({success:false, data: null, msg: e});
          }
     },
 
