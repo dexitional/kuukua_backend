@@ -101,16 +101,15 @@ module.exports = {
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
-             res.status(402).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
            }
         } catch(e){
-          res.status(402).json({success:false, data: null, msg: e});
+          res.status(200).json({success:false, data: null, msg: e});
         }
     },
 
     verifyUser : async (req,res) => {
         const { username,password } = req.body;
-        console.log(req.body);
         try{
             var user = await User.findOne({username}).lean();
             const match = bcrypt.compareSync(password, user.password);
@@ -125,12 +124,12 @@ module.exports = {
                 
             }else{
                 util.logwriter('LOGIN_FAILED',username,{ username,password }) //LOG WRITER
-                res.status(403).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
             console.log(e)
             util.logwriter('LOGIN_FAILED',username,{ username,password }) //LOG WRITER
-            res.status(403).json({success:false, data: null, msg: e});
+            res.status(200).json({success:false, data: null, msg: e});
         }
     },
 
