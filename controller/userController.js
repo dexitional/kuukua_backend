@@ -65,7 +65,7 @@ module.exports = {
             var ins = await User.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               console.log(req.session.user);
-              util.logwriter('USER_UPDATED',req.session.user.username,ins) //LOG WRITER
+              util.logwriter('USER_UPDATED',(req.session.user && req.session.user.username) || 'Admin',ins) //LOG WRITER
               res.status(200).json({success:true, data: ins});
             }else{
               res.status(204).json({success:false, data: null, msg:"Something wrong happend!"});
@@ -189,7 +189,7 @@ module.exports = {
           var ins = await Customer.create(req.body);
           console.log(ins);
           if(ins){
-            util.logwriter('CUSTOMER_CREATED',req.session.user.username,ins) //LOG WRITER
+            util.logwriter('CUSTOMER_CREATED',(req.session.user && req.session.user.username) || 'Admin',ins) //LOG WRITER
             res.status(200).json({success:true, data: ins});
           }else{
             res.status(204).json({success:false, data: null, msg:"Something wrong happend!"});

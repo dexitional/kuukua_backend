@@ -828,12 +828,14 @@ module.exports = {
                 ]}).sort({rid:-1}).populate('product').lean();
             var sales = await Order.find({completed:1,ordertype:'normal'}).sort({oid:-1}).lean();
             var credit = await Order.find({completed:1,ordertype:'credit'}).sort({oid:-1}).lean();
+            /*
             var orders = await Order.find({
                 $or:[
                     { $and: [{completed: 1}, {ordertype: 'normal'}] },
                     { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
                 ]
             }).sort({oid:-1}).lean();
+            */
             var daily = await Order
                 .find({
                     $and: [
@@ -871,14 +873,16 @@ module.exports = {
                     return order;
                 }))
             }
+            /*
             if(orders){
                 orders = orders.map((order) => {
                     order.created_at = moment(order.created_at).format('LLL');
                     return order;
                 })
-            }   
+            } 
+            */  
             
-            res.status(200).json({success:true, data: {orders,clients,approvals,rejected,products,sales,credit,requests,daily}});
+            res.status(200).json({success:true, data: {orders:[],clients,approvals,rejected,products,sales,credit,requests,daily}});
 
         }catch(e){
             res.status(403).json({success:false, data: null, msg: e});
