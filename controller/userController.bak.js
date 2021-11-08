@@ -47,9 +47,8 @@ module.exports = {
     saveUser : async (req,res) => {
         try{
            req.body.password = bcrypt.hashSync(req.body.password,10);
-           //var ins = await User.create(req.body);
-           var ins = await POS.saveUser(req.body);
-           console.log(ins);
+           var ins = await User.create(req.body);
+            console.log(ins);
            if(ins){
              util.logwriter('USER_CREATED',req.session.user.username,ins) //LOG WRITER
              res.status(200).json({success:true, data: ins});
@@ -66,8 +65,7 @@ module.exports = {
         var id = req.params.id;
         console.log(req.session);
         try{
-            //var ins = await User.findByIdAndUpdate({_id: id},req.body);
-            var ins = await POS.updateUser(id,req.body);
+            var ins = await User.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               console.log(req.session.user);
               util.logwriter('USER_UPDATED',(req.session.user && req.session.user.username) || 'Admin',ins) //LOG WRITER
@@ -84,8 +82,7 @@ module.exports = {
     deleteUser : async(req,res) => {
         var id = req.params.id;
         try{
-           //var ins = await User.deleteOne({_id: id}).exec();
-           var ins = await POS.deleteUser(id);
+           var ins = await User.deleteOne({_id: id}).exec();
            if(ins){
              util.logwriter('USER_DELETED',req.session.user.username,ins) //LOG WRITER
              res.status(200).json({success:true, data: ins});
@@ -117,8 +114,7 @@ module.exports = {
     verifyUser : async (req,res) => {
         const { username,password } = req.body;
         try{
-            //var user = await User.findOne({username}).lean();
-            var user = await POS.findUser(username);
+            var user = await User.findOne({username}).lean();
             const match = bcrypt.compareSync(password, user.password);
             if(password && match){
                 user.created_at = moment(user.created_at).format('LLL');
@@ -126,10 +122,8 @@ module.exports = {
                 user.token = token;
                 util.logwriter('LOGIN_SUCCESS',username,{username,password:user.password}) //LOG WRITER
                 req.session.user = user;
-                const settings = await POS.fetchSettings()
-                const activeSetting = await POS.fetchActiveSetting(user.assigned_site)
-
-                res.status(200).json({success:true, data: { user, settings, activeSetting } });
+                console.log(req.session.user);
+                res.status(200).json({success:true, data: user});
                 
             }else{
                 util.logwriter('LOGIN_FAILED',username,{ username,password }) //LOG WRITER
@@ -147,7 +141,7 @@ module.exports = {
         try{
             if(req.query.pwd && req.query.pwd != ''){
               var pwd =  bcrypt.hashSync(req.query.pwd.trim(),10);
-              var ins = await POS.updateUser(id,{password:pwd});
+              var ins = await User.findByIdAndUpdate({_id: id},{password:pwd});
             }
             if(ins){
               util.logwriter('USER_PASSWORD_CHANGED',req.session.user.username,ins) //LOG WRITER
@@ -162,8 +156,7 @@ module.exports = {
 
     fetchClients : async (req,res) => {
         try{
-          const { siteid,sess,page,keyword } = req.query
-            var users = await POS.fetchCustomers(siteid);
+            var users = await Customer.find().sort({_id:-1 }).lean();
             if(users){
                 users = users.map((user) => {
                     user.created_at = moment(user.created_at).format('LLL');
@@ -181,8 +174,7 @@ module.exports = {
     fetchClient : async (req,res) => {
         var id = req.params.id;
         try{
-            //var user = await Customer.findById({_id:id}).lean();
-            var user = await POS.fetchCustomer(id);
+            var user = await Customer.findById({_id:id}).lean();
             if(user){
                 user.created_at = moment(user.created_at).format('LLL');
                 res.status(200).json({success:true, data: user});
@@ -197,8 +189,8 @@ module.exports = {
     saveClient : async (req,res) => {
       console.log(req.body);
         try{
-          //var ins = await Customer.create(req.body);
-          var ins = await POS.saveCustomer(req.body);
+          var ins = await Customer.create(req.body);
+          console.log(ins);
           if(ins){
             util.logwriter('CUSTOMER_CREATED',(req.session.user && req.session.user.username) || 'Admin',ins) //LOG WRITER
             res.status(200).json({success:true, data: ins});
@@ -214,8 +206,7 @@ module.exports = {
     updateClient : async (req,res) => {
         var id = req.params.id;
         try{
-            //var ins = await Customer.findByIdAndUpdate({_id: id},req.body);
-            var ins = await POS.updateCustomer(id,req.body);
+            var ins = await Customer.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               util.logwriter('CUSTOMER_UPDATED',req.session.user.username,ins) //LOG WRITER
               res.status(200).json({success:true, data: ins});
@@ -230,8 +221,7 @@ module.exports = {
     deleteClient : async(req,res) => {
         var id = req.params.id;
         try{
-          //var ins = await Customer.deleteOne({_id: id}).exec();
-          var ins = await POS.deleteCustomer(id)
+          var ins = await Customer.deleteOne({_id: id}).exec();
           if(ins){
             util.logwriter('CUSTOMER_DELETED',req.session.user.username,ins) //LOG WRITER
             res.status(200).json({success:true, data: ins});

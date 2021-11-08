@@ -14,15 +14,13 @@ var moment = require('moment');
 var async = require('async');
 var util = require('../util/logutil');
 const StockLog = require('../model/stocklog');
-const { POS } = require('../model/model');
 
 
 module.exports = {
 
-    // STOCKLOGS
     fetchStockLogs : async (req,res) => {
         try{
-            var logs = await POS.fetchStocklogs();
+            var logs = await StockLog.find({}).lean();
             if(logs.length > 0){
               logs = logs.map((row) => {
                 row.created_at = moment(row.created_at).format('LLL');
@@ -40,7 +38,7 @@ module.exports = {
     makeStockLog : async (req,res) => {
         const id = req.params.id;
         try{
-            var user = await POS.fetchUser(id);
+            var user = await User.findOne({_id:id}).lean();
             if(user.length > 0){
               util.logstock(user.name)
               res.status(200).json({success:true, data: logs});
@@ -52,12 +50,10 @@ module.exports = {
         }
     },
 
-    // LOGS
-
     fetchLogs : async (req,res) => {
         var id = req.params.productId;
         try{
-            var logs = POS.fetchLogs();
+            var logs = await Log.find({}).lean();
             if(logs.length > 0){
                 logs = logs.map((row) => {
                     row.created_at = moment(row.created_at).format('LLL');
@@ -65,17 +61,17 @@ module.exports = {
                 })
                 res.status(200).json({success:true, data: logs});
             }else{
-                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
     fetchProductHistory : async (req,res) => {
-        var pid = req.params.productId;
+        var id = req.params.productId;
         try{
-            var history = await POS.fetchCartByProduct(pid)
+            var history = await Cart.find({product:id}).populate('product order').lean();
             if(history){
                 history = history.map((row) => {
                     row.created_at = moment(row.order.created_at).format('LLL');
@@ -83,18 +79,16 @@ module.exports = {
                 })
                 res.status(200).json({success:true, data: history});
             }else{
-                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
-    // ORDERS
-
     fetchOrders : async (req,res) => {
         try{
-            var orders = await POS.fetchOrders();
+            var orders = await Order.find().sort({oid:-1}).populate('Cart').lean();
             if(orders){
                 orders = orders.map((order) => {
                     order.created_at = moment(order.created_at).format('LLL');
@@ -103,50 +97,50 @@ module.exports = {
                 console.log(orders);
                 res.status(200).json({success:true, data: orders});
             }else{
-                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
     fetchOrder : async (req,res) => {
         var id = req.params.id;
         try{
-            var order = await POS.fetchOrder(id);
+            var order = await Order.findById({_id:id}).populate('Cart').lean();
             if(user){
                 order.created_at = moment(order.created_at).format('LLL');
                 res.status(200).json({success:true, data: order});
             }else{
-                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
     saveOrder : async (req,res) => {
         try{
-           var data = req.body.cart;
-           delete req.body.cart;
-           // Insert Order
-           var ins = POS.saveOrder(req.body);
-           if(ins){
-             var carts = [];
-             if(data && data.length > 0){
-               for(var cart of data){
-                 // Insert Cart Items
-                 cart.order = ins.insertId;
-                 await POS.saveCart(cart);
-               }
+           req.body._id = db.Types.ObjectId;
+           var data = req.body.cart; delete req.body.cart;
+           var carts = [];
+           if(data && data.length > 0){
+             for(var cart of data){
+               // Insert Cart Items
+               cart.order = req.body._id;
+               await Cart.create(cart);
              }
+           }
+           // Insert Order
+           var ins = await Order.create(req.body);
+           if(ins){
              util.logwriter('SALE_CREATED',req.session.user.username,ins) //LOG WRITER
              res.status(200).json({success:true, data: ins});
            }else{
-             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
            }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e.toSring()});
+            res.status(403).json({success:false, data: null, msg: e.toSring()});
         }
     },
 
@@ -163,47 +157,46 @@ module.exports = {
                 await Cart.create(cart);
               }
             }
-            var ins = await POS.updateOrder(id,req.body);
+            var ins = await User.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               res.status(200).json({success:true, data: ins});
             }else{
-              res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
          }catch(e){
-             res.status(200).json({success:false, data: null, msg: e.toSring()});
+             res.status(403).json({success:false, data: null, msg: e.toSring()});
          }
     },
 
     deleteOrder : async(req,res) => {
         var id = req.params.id;
         try{
-           var inx = await POS.deleteCartByOrder(id);
-           var ins = await POS.deleteOrder(id);
+           var inx = await Cart.deleteMany({order: id}).exec();
+           var ins = await Order.deleteOne({_id: id}).exec();
            if(ins && inx){
              res.status(200).json({success:true, data: ins});
            }else{
-             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
            }
         } catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
     deleteOrderOid : async(req,res) => {
         var id = req.params.id;
         try{
-           var order = await POS.fetchOrderByOid(id)
-           var ins = await POS.deleteOrderByOid(id)
+           var ins = await Order.deleteOne({oid: id}).exec();
            if(ins){
-             var inx = await POS.deleteCartByOrder(order.id);
+              var inx = await Cart.deleteMany({order: ins._id}).exec();
            } 
            if(ins && inx){
              res.status(200).json({success:true, data: ins});
            }else{
-             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
            }
         } catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
@@ -216,10 +209,10 @@ module.exports = {
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
-             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+             res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
            }
         } catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
         }
     },
 
@@ -228,27 +221,26 @@ module.exports = {
         var id = req.query.id;
         var created_at = moment(req.query.date);//,'YYYY-MM-DD HH:MM'
         try{
-            var ins = await POS.updateOrder(id,{created_at});
+            var ins = await Order.findByIdAndUpdate({_id: id},{created_at});
             if(ins){
               res.status(200).json({success:true, data: ins});
             }else{
-              res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
          }catch(e){
-             res.status(200).json({success:false, data: null, msg: e});
+             res.status(403).json({success:false, data: null, msg: e});
          }
     },
 
     fetchHelpers : async (req,res) => {
       try{
-          const {siteid} = req.query
           // Helpers - Categories, Vat, Products, orders, transactions, customers
-          var vats = await POS.fetchVats(siteid);
-          var categories = await POS.fetchCategories(siteid);
-          var products = await POS.fetchProducts(siteid);
-          var transactions = await fetchTransactions(siteid);
-          var customers = await POS.fetchCustomers(siteid);
-          var orders = await POS.fetchOrders(siteid);
+          var vats = await Vat.find().exec();
+          var categories = await Category.find().sort({title:1}).exec();
+          var products = await Product.find().sort({title:1}).exec();
+          var transactions = await Transaction.find().sort({tid:-1}).exec();
+          var customers = await Customer.find().exec();
+          var orders = await Order.find().sort({oid:-1}).populate('Cart').lean();
           if(orders){
               orders = orders.map((order) => {
                   order.created_at = moment(order.created_at).format('LLL');
@@ -258,53 +250,53 @@ module.exports = {
           res.status(200).json({success:true, data: {vats,customers,categories,transactions,orders,products}});
 
       }catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
       }
   },
 
   
   rejectedOrders : async (req,res) => {
       try{
-          var orders = await POS.fetchRejectedOrders()
+          var orders = await Order.find({approval:2,ordertype:'credit'}).sort({oid:-1}).populate('Cart Customer User').lean();
           if(orders){
-            orders = orders.map((order) => {
-                order.created_at = moment(order.created_at).format('LLL');
-                return order;
-            })
+              orders = orders.map((order) => {
+                  order.created_at = moment(order.created_at).format('LLL');
+                  return order;
+              })
+              console.log(orders);
               res.status(200).json({success:true, data: orders});
           }else{
-              res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
           }
       }catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
       }
   },
 
 
   creditSales : async (req,res) => {
         try{
-            var orders = await POS.fetchCreditSales();
+            var orders = await Order.find({approval:1,ordertype:'credit'},null,{sort:{_id:-1}}).lean();
             if(orders){
                 orders = await Promise.all(orders.map(async (order) => {
                 
                     order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                    order.cart = await POS.fetchCart(order.id);
+                    order.cart = await Cart.find({order:order._id}).populate('product').lean();
                     return order;
                 }))
                 res.status(200).json({success:true, data: orders});
                 console.log(orders);
             }else{
-                res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+                res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
             }
         }catch(e){
-            console.log(e)
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
   },
 
   CompleteOrders : async (req,res) => {
       try{
-          var orders = POS.fetchCompletedOrders();
+          var orders = await Order.find({completed:1}).sort({oid:-1}).populate('Cart').lean();
           if(orders){
               orders = orders.map((order) => {
                   order.created_at = moment(order.created_at).format('LLL');
@@ -313,16 +305,16 @@ module.exports = {
               console.log(orders);
               res.status(200).json({success:true, data: orders});
           }else{
-              res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
           }
       }catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
       }
   },
 
   Payments : async (req,res) => {
       try{
-          var orders = await POS.fetchTransactions();
+          var orders = await Transaction.find({completed:1}).sort({oid:-1}).populate('Order').lean();
           if(orders){
               orders = orders.map((order) => {
                   order.created_at = moment(order.created_at).format('LLL');
@@ -331,107 +323,122 @@ module.exports = {
               console.log(orders);
               res.status(200).json({success:true, data: orders});
           }else{
-              res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+              res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
           }
       }catch(e){
-          res.status(200).json({success:false, data: null, msg: e});
+          res.status(403).json({success:false, data: null, msg: e});
       }
   },
 
   cashSales : async (req,res) => {
-    try{  
-        var orders = await POS.fetchCashSales()
+    try{  //completed:1,ordertype:credit
+        var orders = await Order.find({ordertype:'normal', completed: 1}).sort({oid:-1}).lean();
         if(orders){
             orders = await Promise.all(orders.map(async (order) => {
+                
                 order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                order.cart = await POS.fetchCart(order.id);
+                order.cart = await Cart.find({order:order._id}).populate('product').lean();
                 return order;
-                setTimeout(() => console.log('sleep 300ms'),300)
             }))
+            console.log(orders);
             res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   completeSales : async (req,res) => {
-    try{  
-        const { siteid,sess,page,keyword } = req.query
-        
-        var orders = await POS.fetchCompletedSales(siteid,sess,page,keyword)
-        var newOrders = []
+    try{  //completed:1,ordertype:credit
+        var orders = await Order
+        .find({
+            $or:[
+                { $and: [{completed: 1}, {ordertype: 'normal'}] },
+                { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
+            ]
+        })
+        .sort({oid:-1})
+        .lean();
         if(orders){
-            if(orders.data && orders.data.length > 0){
-                newOrders = await Promise.all(orders.data.map(async (order) => {
-                    order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                    order.cart = await POS.fetchCart(order.id);
-                    return order;
-                }))
-                res.status(200).json({success:true, data: {...orders, data:newOrders } });
-            }else{
-                res.status(200).json({success:true, data: {totalPages: 0, totalData: 0, data: [],} });
-            }
+            orders = await Promise.all(orders.map(async (order) => {
+                
+                order.created_at = moment(order.created_at).format('LLL').toUpperCase();
+                order.cart = await Cart.find({order:order._id}).populate('product').lean();
+                return order;
+            }))
+            console.log(orders);
+            res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        console.log(e)
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   dailySales : async (req,res) => {
-    const { siteid,sess,page,keyword } = req.query
-    console.log(sess);
-    try{  
-        var orders = await POS.fetchDailySales(siteid,sess,page,keyword)
-        console.log(orders)
-        var newOrders = []
+    try{  //completed:1,ordertype:credit
+        
+        const today = moment().startOf('day')
+        var orders = await Order
+        .find({
+            $and: [
+              { $or:[
+                    { $and: [{completed: 1}, {ordertype: 'normal'}] },
+                    { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
+                ] 
+              },
+              { created_at: {
+                   $gte: today.toDate(),
+                   $lte: moment(today).endOf('day').toDate()
+                }
+              }
+            ] 
+        })
+        .sort({oid:-1})
+        .lean();
         if(orders){
-            if(orders.data && orders.data.length > 0){
-                newOrders = await Promise.all(orders.tdata.map(async (order) => {
-                    order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                    order.cart = await POS.fetchCart(order.id);
-                    return order;
-                }))
-                res.status(200).json({success:true, data: {...orders, data:newOrders } });
-            }else{
-                res.status(200).json({success:true, data: {totalPages: 0, totalData: 0, data: [],} });
-            }
+            orders = await Promise.all(orders.map(async (order) => {
+                
+                order.created_at = moment(order.created_at).format('LLL').toUpperCase();
+                order.cart = await Cart.find({order:order._id}).populate('product').lean();
+                return order;
+            }))
+            console.log(orders);
+            res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
-
     }catch(e){
-        console.log(e)
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   rejectSales : async (req,res) => {
     try{  //{completed: 1, approval: 2}
-        var orders = await POS.fetchRejectedSales();
+        var orders = await Order.find({completed: 1, approval: 2}).sort({oid:-1}).lean();
         if(orders){
             orders = await Promise.all(orders.map(async (order) => {
+                
                 order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                order.cart = await POS.fetchCart(order.id);
+                order.cart = await Cart.find({order:order._id}).populate('product').lean();
                 return order;
             }))
+            console.log(orders);
             res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   paidSales : async (req,res) => {
-    try{  
-        var orders = await POS.fetchTransactions();
+    try{  //{completed: 1, approval: 2}
+        var orders = await Transaction.find({status: 1}).sort({oid:-1}).populate('order').lean();
         if(orders){
             orders = await Promise.all(orders.map(async (order) => {
                 order.created_at = moment(order.created_at).format('LLL').toUpperCase();
@@ -440,51 +447,53 @@ module.exports = {
             console.log(orders);
             res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   receipt : async (req,res) => {
     var id = req.params.id;
-    try{ 
-        var order = await POS.fetchOrderByOid(id);
+    try{  //completed:1,ordertype:credit
+        var order = await Order.findOne({oid:id}).sort({oid:-1}).lean();
         if(order){
             order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-            order.cart = await POS.fetchCart(order.id);
+            order.cart = await Cart.find({order:order._id}).populate('product').lean();
             res.status(200).json({success:true, data: order});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
 
   draftOrders : async (req,res) => {
-    try{ 
-        var orders = await POS.fetchDraftOrders();
+    try{  //completed:1,ordertype:credit
+        var orders = await Order.find({completed:0, ordertype:'credit'}).sort({oid:-1}).lean();
         if(orders){
             orders = await Promise.all(orders.map(async (order) => {
+                
                 order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                order.cart = await POS.fetchCart(order.id);
+                order.cart = await Cart.find({order:order._id}).populate('product').lean();
                 return order;
             }))
             res.status(200).json({success:true, data: orders});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
 
   updateDraftOrder : async (req,res) => {
       var id = req.params.id;
+      console.log(req.body);
       try{
           var data;
           if(req.body.action == 'approve'){
@@ -492,20 +501,31 @@ module.exports = {
           }else{
              data = { approval : 2, completed: 1 }
           }
-          var ins = await POS.updateOrder(id,data);
+          var ins = await Order.findByIdAndUpdate({_id: id},data);
           if(ins){
-            var cart = await fetchCart(id);
+            var cart = await Cart.find({order: id}).populate('product').lean();
             if(cart && cart.length > 0){
                 for(var ct of cart){
-                  var reduce_result = await POS.updateProduct(ct.product._id,{quantity:ct.product.quantity-ct.quantity})
+                    var reduce_result = await Product.findByIdAndUpdate({_id:ct.product._id},{quantity:ct.product.quantity-ct.quantity})
                 }
             }
-            res.status(200).json({success:true, data: ins});
+           /* 
+            // Transaction & Payment
+            var paydata = {
+               user:req.body.user,
+               order : ins._id,
+               tid : moment(new Date()).unix(),
+               amount_charge : ins.amount,
+               paymode: 'credit',
+            }; var pay = await Transaction.create(paydata);
+            */
+           res.status(200).json({success:true, data: ins});
+          
           }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
           }
         }catch(e){
-            res.status(200).json({success:false, data: null, msg: e});
+            res.status(403).json({success:false, data: null, msg: e});
         }
   },
 
@@ -523,11 +543,10 @@ module.exports = {
                 ordertype: 'normal',
                 approval: 1,
                 completed : 1,
-                created_at: new Date(),
-                siteid:req.body.siteid,
+                created_at: moment(new Date())
             };
 
-            var order_result = await POS.saveOrder(orderdata);
+            var order_result = await Order.create(orderdata);
             if(order_result){
                 // Cart
                 var cart = req.body.cart;
@@ -538,14 +557,24 @@ module.exports = {
                 if(cart && cart.length > 0){
                     for(var ct of cart){
                         // Insert Cart Items
-                        let cartdata = { product_id: ct.id, order_id: order_result.insertId, price: ct.price, amount: ct.price*ct.quantity, discount: 0.0, tax: 0.0, quantity: ct.quantity, siteid:req.body.siteid }
-                        var cart_result = await POS.saveCart(cartdata);
+                        let cartdata = { product: ct._id, order: order_result._id, price: ct.price, amount: ct.price*ct.quantity, discount: 0.0, tax: 0.0, quantity: ct.quantity }
+                        //var cart_result = await Cart.create(cartdata);
+                        cartArray.push({
+                           insertOne: { document: cartdata }
+                        })
+                        
                         // Reduce Stock
-                        var product = await POS.fetchProduct(ct.id);
+                        var product = await Product.findOne({_id:ct._id}).lean();
                         if(product){
                             let qty = product.quantity - ct.quantity;
                             if(qty >= 0) {
-                              await POS.updateProduct(ct.id,{quantity:qty})
+                              //await Product.findByIdAndUpdate({_id:ct._id},{quantity:qty})
+                              productArray.push({
+                                updateOne: {
+                                  filter: {_id:ct._id},
+                                  update: { quantity:qty}
+                                }
+                              })
                             } else {
                                errorCount += 1;
                             }
@@ -555,53 +584,63 @@ module.exports = {
                     }
                 }
                 if(errorCount <= 0){
+                    // Create Cart
+                    if(cartArray.length > 0) {
+                       await Cart.bulkWrite(cartArray);
+                    }
+                    // Update Products
+                    if(productArray.length > 0) {
+                       await Product.bulkWrite(productArray);
+                    }
                     // Transaction & Payment
                     var paydata = {
                         user:req.body.user,
-                        order_id : order_result.insertId,
+                        order : order_result._id,
                         tid : moment(new Date()).unix(),
                         amount_charge : req.body.amount,
                         paymode: 'cash',
-                        created_at: new Date(),
-                        siteid:req.body.siteid,
-                    };  await POS.saveTransaction(paydata);
-                    
+                        created_at: moment(new Date())
+                    };  await Transaction.create(paydata);
+                    console.log(`ERROR COUNT: ${errorCount}`)
+                
                     // Log Order
-                    util.logorder(order_result.insertId,'normal','new',req.body.cart,req.body.refname,req.body.user,req.body.amount,req.body.siteid,)
+                    util.logorder(order_result._id,'normal','new',req.body.cart,req.body.refname,req.body.user,req.body.amount)
                     // Return Response
-                    res.status(200).json({success:true, data: {...order_result,...orderdata} });
+                    res.status(200).json({success:true, data: order_result});
 
                 }else{
                     // Errors - Revoke Order
-                    await POS.deleteOrder(order_result.insertId);
+                    await Order.deleteOne({_id:order_result._id});
                     res.status(200).json({success:false, data: null, msg:"Some products are out of Stock!"});
                 }
             }else{
-                res.status(200).json({success:false, data: null, msg: "Sales order failed!" });
+                res.status(202).json({success:false, data: null, msg: "Sales order failed!" });
             }
         }catch(e){
             console.log(e);
-            res.status(200).json({success:false, data: null, msg: "System error occurred!" });
+            res.status(403).json({success:false, data: null, msg: "System error occurred!" });
         }
   },
 
   updateSale : async (req,res) => {
      var id = req.params.id;
      try{
+        var cartArray = []
+        var productArray = []
         var productData = [];
         var errorCount = 0;
         // OLD CART
-        var kart = await POS.fetchCart(id)
+        var kart = await Cart.find({order:id}).lean();
         if(kart && kart.length > 0){
             for(var ct of kart){
-              var product = await POS.fetchProduct(ct.product_id);
+              var product = await Product.findOne({_id:ct.product}).lean();
               if(product){
-                var isRec = productData.findIndex(pr => pr.id == ct.product_id);
+                var isRec = productData.findIndex(pr => pr.id == ct.product);
                 if(isRec > -1){
                   productData[isRec]['quantity'] = parseFloat(productData[isRec]['quantity']) + parseFloat(ct.quantity);
                 }else{
                   productData.push({
-                    id: product.id,
+                    id: product._id,
                     quantity : parseFloat(product.quantity) + parseFloat(ct.quantity),
                   })
                 }
@@ -613,40 +652,57 @@ module.exports = {
         var cart = req.body.cart;
         if(cart && cart.length > 0){
             
-            await POS.deleteCartByOrder(id)
+            cartArray.push({
+               deleteMany: { filter: { order:id } }
+            })
+            
             for(var ct of cart){
-                var product = await POS.fetchProduct(ct.id);
-                var isRec = productData.findIndex(pr => pr.id == ct.id);
-                var cartdata = { product_id:ct.id, order_id:id, price:ct.price, amount: parseFloat(ct.price*ct.quantity), discount: 0.0, tax: 0.0, quantity: ct.quantity, siteid:req.body.siteid }
-                await POS.saveCart(cartdata)
+                
+                var product = await Product.findOne({_id:ct._id}).lean();
+                var isRec = productData.findIndex(pr => pr.id == ct._id);
+                var cartdata = { product:ct._id, order:id, price:ct.price, amount: parseFloat(ct.price*ct.quantity), discount: 0.0, tax: 0.0, quantity: ct.quantity }
+                cartArray.push({
+                   insertOne: { document: cartdata }
+                })
                 if(isRec != -1){
                    productData[isRec]['quantity'] = parseFloat(productData[isRec]['quantity']) - parseFloat(ct.quantity);
                 }else{
-                   productData.push({
-                      id: product.id,
-                      quantity : parseFloat(product.quantity) - parseFloat(ct.quantity)
-                   })
+                    productData.push({
+                        id: product._id,
+                        quantity : parseFloat(product.quantity) - parseFloat(ct.quantity)
+                    })
                 }
             }
         }
 
         if(productData.length > 0){
             for(var p of productData){
-               if(parseFloat(p.quantity) > 0){
-                  await POS.updateProduct(p.id,{ quantity: parseFloat(p.quantity) })
-               }else{
+                if(parseFloat(p.quantity) > 0){
+                    productArray.push({
+                      updateOne: {
+                        filter: { _id:p.id },
+                        update: { quantity: parseFloat(p.quantity) }
+                      }
+                    })
+                }else{
                   errorCount += 1;
-               }
+                }
             }
         }
 
         if(errorCount <= 0){
-            var order = await POS.fetchOrder(id);
-            var order_result = await POS.updateOrder(id,{ amount:req.body.amount });
+            if(productArray.length > 0 ) {
+               await Product.bulkWrite(productArray);
+            }
+            if(cartArray.length > 0) {  
+               await Cart.bulkWrite(cartArray);
+            }
+            var order_result = await Order.findOneAndUpdate({_id:id},{ amount:req.body.amount },{ new:true });
             // Log Order
-            util.logorder(id,order.ordertype,'update',req.body.cart,req.body.refname,req.body.user,req.body.amount,req.body.siteid)
+            util.logorder(order_result._id,order_result.ordertype,'update',req.body.cart,req.body.refname,req.body.user,req.body.amount)
             // Return Response       
             res.status(200).json({success:true, data: order_result});
+            
         }else{
             res.status(200).json({success:false, data: null, msg:"Some products are out of Stock!"});
         }
@@ -660,34 +716,41 @@ module.exports = {
   returnSales : async (req,res) => {
       var id = req.params.id;
       try{
-        
-        var kart = await POS.fetchCart(id)
+        var kart = await Cart.find({order:id}).lean();
         if(kart && kart.length > 0){
             var productData = [];
             var crt = []
             for(var ct of kart){
-                var product = await POS.fetchProduct(ct.product_id);
+                var product = await Product.findOne({_id:ct.product}).lean();
                 if(product){
                   const qty = parseFloat(product.quantity) + parseFloat(ct.quantity);
-                  await POS.updateProduct(ct.product_id,{ quantity: qty })
+                  productData.push({
+                    updateOne: {
+                      filter: { _id:product._id },
+                      update: { quantity:qty }
+                    } 
+                  })
                 } 
-                crt.push({product_id:ct.product_id, quantity: ct.quantity, price: product.price})
+                
+                crt.push({_id:ct.product, quantity: ct.quantity, price: product.price})
             }
-        }
+            if(productData.length > 0) {
+               await Product.bulkWrite(productData);
+            }
+         }
        
-         var order = await POS.fetchOrder(id);
          // Delete Order 
-         var order_result = await POS.deleteOrder(id);
+         var order_result = await Order.deleteOne({_id:id});
          if(order_result){
             // Log Order
-            util.logorder(order.id,order_result.ordertype,'return',crt,order.refname,order.user,order.amount,order.siteid)
+            util.logorder(order_result._id,order_result.ordertype,'return',crt,order_result.refname,order_result.user,order_result.amount)
             // Return Response       
             res.status(200).json({success:true, data: order_result});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
          }
       }catch(e){
-         res.status(200).json({success:false, data: null, msg: e});
+         res.status(403).json({success:false, data: null, msg: e});
       }
   },
   
@@ -705,24 +768,23 @@ module.exports = {
             ordertype: 'credit',
             approval: 0,
             completed : 0,
-            created_at: new Date(),
-            siteid : req.body.siteid
+            created_at: moment(new Date())
         };
-        var order_result = await POS.saveOrder(orderdata);
+        var order_result = await Order.create(orderdata);
         if(order_result){
             // Cart
             var cart = req.body.cart;
             if(cart && cart.length > 0){
               for(var ct of cart){
                 // Insert Cart Items
-                let cartdata = { product_id: ct.id, order_id: order_result.insertId, price: ct.price, amount: ct.price*ct.quantity, discount: 0.0, tax: 0.0, quantity: ct.quantity, siteid: req.body.siteid }
-                var cart_result = await POS.saveCart(cartdata);
+                let cartdata = { product: ct._id, order: order_result._id, price: ct.price, amount: ct.price*ct.quantity, discount: 0.0, tax: 0.0, quantity: ct.quantity }
+                var cart_result = await Cart.create(cartdata);
               }
             }
             // Log Order
-            util.logorder(order_result.insertId,orderdata.ordertype,'new',cart,orderdata.refname,orderdata.user,orderdata.amount,req.body.siteid)
+            util.logorder(order_result._id,order_result.ordertype,'new',cart,req.body.refname,req.body.user,req.body.amount)
             // Return Response       
-            res.status(200).json({success:true, data: {...order_result,...orderdata} });
+            res.status(200).json({success:true, data: order_result});
         }else{
             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
         }
@@ -735,29 +797,96 @@ module.exports = {
 
 
   overview : async (req,res) => {
-    try{
-        const { siteid,sess,page,keyword } = req.query
-        var products = await POS.countProducts(siteid)
-        var approvals = await POS.countPendedApprovals(siteid)
-        var requests = await POS.fetchRequestsToday(siteid)
-        var daily = await POS.fetchDailySales(siteid,sess,page,keyword)
-        var newDaily = []
-        if(daily){
-            if(daily.data && daily.data.length > 0){
-                newDaily = await Promise.all(daily.data.map(async (order) => {
+        var from = req.query.from;
+        var to = req.query.to;
+        const today = moment().startOf('day')
+        try{
+            var clients = (await Order.find({
+                $and: [
+                { $or:[
+                        { $and: [{completed: 1}, {ordertype: 'normal'}] },
+                        { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
+                    ] 
+                },
+                { created_at: {
+                    $gte: today.toDate(),
+                    $lte: moment(today).endOf('day').toDate()
+                    }
+                }
+                ] 
+            }).exec()).length;
+            var products = (await Product.find().exec()).length;
+            var approvals = (await Order.find({approval:0,ordertype:'credit'}).exec()).length;
+            var rejected = (await Order.find({approval:2,ordertype:'credit'}).exec()).length;
+            var requests = await Request.find({ $and: [
+                { status: 1},
+                { created_at: {
+                    $gte: today.toDate(),
+                    $lte: moment(today).endOf('day').toDate()
+                    }
+                }
+                ]}).sort({rid:-1}).populate('product').lean();
+            var sales = await Order.find({completed:1,ordertype:'normal'}).sort({oid:-1}).lean();
+            var credit = await Order.find({completed:1,ordertype:'credit'}).sort({oid:-1}).lean();
+            /*
+            var orders = await Order.find({
+                $or:[
+                    { $and: [{completed: 1}, {ordertype: 'normal'}] },
+                    { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
+                ]
+            }).sort({oid:-1}).lean();
+            */
+            var daily = await Order
+                .find({
+                    $and: [
+                        { $or:[
+                             { $and: [{completed: 1}, {ordertype: 'normal'}] },
+                             { $and: [{completed: 1}, {ordertype: 'credit'},{approval: 1}] },
+                          ] 
+                        },
+                        { created_at: {
+                            $gte: today.toDate(),
+                            $lte: moment(today).endOf('day').toDate()
+                            }
+                        }
+                    ] 
+                })
+                .sort({oid:-1})
+                .lean();
+
+            if(sales){
+                sales = sales.map((order) => {
+                    order.created_at = moment(order.created_at).format('LLL');
+                    return order;
+                })
+            }
+            if(credit){
+                credit = credit.map((order) => {
+                    order.created_at = moment(order.created_at).format('LLL');
+                    return order;
+                })
+            }
+            if(daily){
+                daily = await Promise.all(daily.map(async (order) => {
                     order.created_at = moment(order.created_at).format('LLL').toUpperCase();
-                    order.cart = await POS.fetchCart(order.id);
+                    order.cart = await Cart.find({order:order._id}).populate('product').lean();
                     return order;
                 }))
-                res.status(200).json({success:true, data: { approvals,products,requests,daily:{...daily, data:newDaily } }});
-            }else{
-                res.status(200).json({success:true, data: { approvals,products,requests,daily:{totalPages: 0, totalData: 0, data:[], tdata:[] } }});
             }
+            /*
+            if(orders){
+                orders = orders.map((order) => {
+                    order.created_at = moment(order.created_at).format('LLL');
+                    return order;
+                })
+            } 
+            */  
+            
+            res.status(200).json({success:true, data: {orders:[],clients,approvals,rejected,products,sales,credit,requests,daily}});
+
+        }catch(e){
+            res.status(403).json({success:false, data: null, msg: e});
         }
-    }catch(e){
-        console.log(e)
-        res.status(200).json({success:false, data: null, msg: e});
-    }
   },
 
 
@@ -947,73 +1076,72 @@ module.exports = {
         res.status(200).json({success:true, data: {orders,clients,products,sales,title,chartyear,chartweek,weektitle,yeartitle}});
 
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
-  },
+},
 
 
   request : async (req,res) => {
-     try{
+    console.log(req.body)
+    try{
         // Request 
         var cart = [];
         for(var ct of req.body.cart){
-            var d = { user:req.body.user, receiver:req.body.user, oid:req.body.oid, product_id: ct.id, quantity: ct.quantity, rid: moment().unix(), timestamp: moment(new Date()).format('LLL'), created_at: new Date() }
+            var d = { user:req.body.user, receiver:req.body.user, oid:req.body.oid, product: ct.product._id, quantity: ct.quantity, rid: moment().unix(), created_at: moment(new Date()) }
             cart.push(d);
         }
-        var result = await POS.saveRequest(cart);
+        var result = await Request.create(cart);
         if(result){
            res.status(200).json({success:true, data: result});
         }else{
-           res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+           res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
-     }catch(e){
+    }catch(e){
         console.log(e);
-        res.status(200).json({success:false, data: null, msg: e});
-     }
+        res.status(403).json({success:false, data: null, msg: e});
+    }
   },
 
   fetchRequest : async (req,res) => {
-    try{  
-        var requests = await POS.fetchRequests();
-        console.log(requests)
+    try{  //completed:1,ordertype:credit
+        var requests = await Request.find({status:1}).sort({rid:-1}).populate('product').lean();
         if(requests){
             res.status(200).json({success:true, data: requests});
         }else{
-            res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+            res.status(202).json({success:false, data: null, msg:"Something wrong happend!"});
         }
     }catch(e){
-        console.log(e)
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
   },
 
   deleteRequest : async(req,res) => {
     var id = req.params.id;
     try{
-       var ins = await POS.deleteRequest(id);
+       var ins = await Request.deleteOne({_id: id}).exec();
        if(ins){
          res.status(200).json({success:true, data: ins});
        }else{
-         res.status(200).json({success:false, data: null, msg:"Something wrong happend!"});
+         res.status(403).json({success:false, data: null, msg:"Something wrong happend!"});
        }
     } catch(e){
-      res.status(200).json({success:false, data: null, msg: e});
+      res.status(403).json({success:false, data: null, msg: e});
     }
-  },
+},
 
 
 
   resetall : async (req,res) => {
     try{
-        //await Order.deleteMany({}).exec();
-        //await Cart.deleteMany({}).exec();
-        //await Transaction.deleteMany({}).exec();
-        //await Restock.deleteMany({}).exec();
-        //await Request.deleteMany({}).exec();
-        //res.status(200).json({success:true, data: "Reset success"});
+        await Order.deleteMany({}).exec();
+        await Cart.deleteMany({}).exec();
+        await Transaction.deleteMany({}).exec();
+        await Restock.deleteMany({}).exec();
+        await Request.deleteMany({}).exec();
+        res.status(200).json({success:true, data: "Reset success"});
     
     }catch(e){
-        res.status(200).json({success:false, data: null, msg: e});
+        res.status(403).json({success:false, data: null, msg: e});
     }
 },
 

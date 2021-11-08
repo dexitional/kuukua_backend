@@ -7,13 +7,11 @@ var bcrypt = require('bcrypt');
 
 var moment = require('moment');
 const restock = require('../model/restock');
-const { POS } = require('../model/model');
 module.exports = {
 
     fetchProducts : async (req,res) => {
         try{
-            const { siteid } = req.query
-            var products = await POS.fetchProducts(siteid);
+            var products = await Product.find().populate('vat category').sort({title:1}).exec();
             if(products){
                 res.status(200).json({success:true, data: products});
             }else{
@@ -24,27 +22,10 @@ module.exports = {
         }
     },
 
-    fetchSearchProducts : async (req,res) => {
-      try{
-          const { siteid,page,keyword } = req.query
-          var products = await POS.fetchSearchProducts(siteid,page,keyword);
-          console.log(req.query)
-          //console.log(products)
-          if(products){
-              res.status(200).json({success:true, data: products});
-          }else{
-              res.status(403).json({success:false, data: null, msg:"Something wrong happend!"});
-          }
-      }catch(e){
-        console.log(e)
-          res.status(403).json({success:false, data: null, msg: e});
-      }
-    },
-
     fetchProduct : async (req,res) => {
         var id = req.params.id;
         try{
-            var product = await POS.fetchProduct(id);
+            var product = await Product.findById({_id:id}).populate('vat category').exec();
             if(product){
                 product.created_at = moment(product.created_at).format('LLL');
                 res.status(200).json({success:true, data: product});
@@ -59,7 +40,7 @@ module.exports = {
     saveProduct : async (req,res) => {
         console.log(req.body);
         try{
-           var ins = await POS.saveProduct(req.body);
+           var ins = await Product.create(req.body);
            if(ins){
              res.json({success:true, data: ins});
            }else{
@@ -72,8 +53,9 @@ module.exports = {
 
     updateProduct : async (req,res) => {
         var id = req.params.id;
+        console.log(req.body);
         try{
-            var ins = await POS.updateProduct(id,req.body);
+            var ins = await Product.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               res.json({success:true, data: ins});
             }else{
@@ -87,7 +69,7 @@ module.exports = {
     deleteProduct : async(req,res) => {
         var id = req.params.id;
         try{
-           var ins = await POS.deleteProduct(id);
+           var ins = await Product.deleteOne({_id: id}).exec();
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
@@ -115,23 +97,20 @@ module.exports = {
         }
     },
 
-    fetchAsyncProducts : async (req,res) => {
+    fetchAsyncProducts : async () => {
       try{
-          const { siteid } = req.query
-          console.log(req.query)
-          var products = await POS.fetchProducts(siteid);
+          var products = await Product.find().populate('vat category').sort({title:1}).lean();
           if(products){
               products = products.map((row) => {
-                row.max = row.quantity;
-                return row;
+                  row.max = row.quantity;
+                  return row;
               })
-              res.status(200).json({success:true, data: products })
+              return {success:true, data: products }
           }else{
-             res.status(200).json({success:false, data: null, msg:"Something wrong happend!"})
+              return {success:false, data: null, msg:"Something wrong happend!"}
           }
       }catch(e){
-        console.log(e)
-        //res.status(200).json({success:false, data: null, msg: e })
+          return {success:false, data: null, msg: e }
       }
   },
 
@@ -139,8 +118,7 @@ module.exports = {
 
     fetchCats : async (req,res) => {
         try{
-            const { siteid } = req.query
-            var cats = await POS.fetchCategories();
+            var cats = await Category.find().sort({title:1}).lean();
             if(cats){
                res.status(200).json({success:true, data: cats});
             }else{
@@ -154,7 +132,7 @@ module.exports = {
     fetchCat : async (req,res) => {
         var id = req.params.id;
         try{
-            var cat = await POS.fetchCategory(id);
+            var cat = await Category.findById({_id:id}).lean();
             if(cat){
                 res.status(200).json({success:true, data: cat});
             }else{
@@ -167,7 +145,7 @@ module.exports = {
 
     saveCat : async (req,res) => {
         try{
-           var ins = await POS.saveCategory(req.body);
+           var ins = await Category.create(req.body);
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
@@ -180,8 +158,10 @@ module.exports = {
 
     updateCat : async (req,res) => {
         var id = req.params.id;
+         console.log(req.body);
         try{
-            var ins = await POS.updateCategory(id,req.body);
+            var ins = await Category.findByIdAndUpdate({_id: id},req.body);
+            console.log(ins);
             if(ins){
               res.status(200).json({success:true, data: ins});
             }else{
@@ -195,7 +175,7 @@ module.exports = {
     deleteCat : async(req,res) => {
         var id = req.params.id;
         try{
-           var ins = await POS.deleteCategory(id);
+           var ins = await Category.deleteOne({_id: id}).exec();
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
@@ -228,8 +208,7 @@ module.exports = {
 
     fetchVats : async (req,res) => {
         try{
-            const { siteid } = req.query
-            var vats = await POS.fetchVats(siteid);
+            var vats = await Vat.find().lean();
             if(vats){
                res.status(200).json({success:true, data: vats});
             }else{
@@ -243,7 +222,7 @@ module.exports = {
     fetchVat : async (req,res) => {
         var id = req.params.id;
         try{
-            var vat = await POS.fetchVat(id);
+            var vat = await Vat.findById({_id:id}).lean();
             if(vat){
                 res.status(200).json({success:true, data: vat});
             }else{
@@ -255,8 +234,11 @@ module.exports = {
     },
 
     saveVat : async (req,res) => {
+        console.log("new vat");
+        console.log(req);
+        
         try{
-           var ins = await POS.saveVat(req.body);
+           var ins = await Vat.create(req.body);
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
@@ -268,9 +250,12 @@ module.exports = {
     },
 
     updateVat : async (req,res) => {
+        console.log("vat updates");
+        console.log(req.body);
+        
         var id = req.params.id;
         try{
-            var ins = await POS.updateVat(id,req.body);
+            var ins = await Vat.findByIdAndUpdate({_id: id},req.body);
             if(ins){
               res.status(200).json({success:true, data: ins});
             }else{
@@ -284,7 +269,7 @@ module.exports = {
     deleteVat : async(req,res) => {
         var id = req.params.id;
         try{
-           var ins = await POS.deleteVat(id);
+           var ins = await Vat.deleteOne({_id: id}).exec();
            if(ins){
              res.status(200).json({success:true, data: ins});
            }else{
@@ -312,12 +297,9 @@ module.exports = {
         }
     },
 
-
-    /* RESTOCK  */
     fetchRestocks : async (req,res) => {
       try{
-          const { siteid } = req.query
-          var stocks = await POS.fetchRestocks(siteid);
+          var stocks = await Restock.find().populate('product').sort({_id:-1}).lean();
           if(stocks){
              stocks = stocks.map((stock) => {
                   stock.created_at = moment(stock.created_at).format('LLL');
@@ -332,13 +314,10 @@ module.exports = {
       }
   },
 
-
-  /* RESTOCK  */
-
   fetchRestock : async (req,res) => {
       var id = req.params.id;
       try{
-          var product = await POS.fetchRestock(id);
+          var product = await Restock.findById({_id:id}).populate('product').lean();
           if(product){
               product.created_at = moment(product.created_at).format('LLL');
               res.status(200).json({success:true, data: product});
@@ -351,9 +330,10 @@ module.exports = {
   },
 
   saveRestock : async (req,res) => {
+      console.log(req.body);
       try{
          req.body.created_at = moment(new Date())
-         var ins = await POS.saveRestock(req.body);
+         var ins = await Restock.create(req.body);
          if(ins){
            res.status(200).json({success:true, data: ins});
          }else{
@@ -368,7 +348,7 @@ module.exports = {
       var id = req.params.id;
       console.log(req.body);
       try{
-          var ins = await POS.updateRestock(id,req.body);
+          var ins = await Restock.findByIdAndUpdate({_id: id},req.body);
           if(ins){
             res.status(200).json({success:true, data: ins});
           }else{
@@ -382,7 +362,7 @@ module.exports = {
   deleteRestock : async(req,res) => {
       var id = req.params.id;
       try{
-         var ins = await POS.deleteRestock(id)
+         var ins = await Product.deleteOne({_id: id}).exec();
          if(ins){
            res.status(200).json({success:true, data: ins});
          }else{
@@ -397,15 +377,15 @@ module.exports = {
   loadRestock : async(req,res) => {
       var id = req.params.id;
       try{
-        var stock = await POS.fetchRestock(id);
+        var stock = await Restock.findOne({_id:id}).lean();
         if(stock){
-            var product = await POS.fetchProduct(stock.product_id);
+            var product = await Product.findOne({_id:stock.product}).lean();
             var qty = product.quantity + stock.quantity;
             /*var data = {quantity:qty, price:stock.price, cprice: stock.cprice}*/
             var data = {quantity:qty}
-            var ins = await POS.updateProduct(product.id,data);
+            var ins = await Product.findByIdAndUpdate({_id: product._id},data);
             if(ins){
-              var ins = await POS.updateRestock(stock._id,{action:1});
+              var ins = await Restock.findByIdAndUpdate({_id: stock._id},{action:1});
               res.status(200).json({success:true, data: ins});
             }else{
               res.status(202).json({success:true, data: null, msg:"Something wrong happend!"});

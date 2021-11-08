@@ -72,6 +72,7 @@ module.exports = (function() {
 
     /* Product Routes */
     app.get('/api/products', productController.fetchProducts);
+    app.get('/api/productsearch', productController.fetchSearchProducts);
     app.get('/api/products/:id', productController.fetchProduct);
     app.post('/api/products', productController.saveProduct);
     app.put('/api/products/:id', productController.updateProduct);
